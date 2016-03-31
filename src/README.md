@@ -39,7 +39,6 @@
   >...
   ,
   
-  where numi denote the *i*-th meanings' embedding of character. For code convinience, in our **SCWE+M** model, we set the
-  meaning number of character to a fix value, for **SCWE** , the fix value is 1.
+  where numi denote the *i*-th meanings' embedding of character. For code convinience, in our **SCWE+M** model, we allocate a    fix number of array space for each character, for **SCWE** , the fix value is 1.
  
  
