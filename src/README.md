@@ -1,6 +1,6 @@
 # Train Model
 
- This code is developed based on CWE, it is avaiable at : [CWE](https://github.com/Leonard-Xu/CWE)
+ This code is developed based on CWE, it is avaiable at [CWE](https://github.com/Leonard-Xu/CWE)
  
 ##Usage
 - use make to compile scwe.c
