@@ -51,7 +51,7 @@ struct vocab_word {
                       (not equal to the length of string due to UTF-8 encoding)
    * character_emb_select[i][j] : count character[i] select the j-th cluster
    * char_word_sim[i]: the i-th character's similarity with the word
-   * character_class[i]: the i-th character's meaning number in a word
+   * character_class[i]: the i-th character's meaning order number in a word
    */
 };
 
