@@ -1014,7 +1014,7 @@ int main(int argc, char **argv) {
     printf("\t\tSet the debug mode (default = 2 = more info during training)\n");
 
     printf("\t-cwe-type <int>\n");
-    printf("\t\tSet cwe type; default is 2(CWE+P), 1(CWE), 0(word2vec), 3(CWE+L), 4(CWE+LP), 5(CWE+N), 6(CWE+F)\n");
+    printf("\t\tSet cwe type; default is 2(CWE+P), 1(CWE), 0(word2vec), 3(CWE+L), 4(CWE+LP), 5(CWE+N), 6(SCWE), 7(SCWE+M)\n");
     printf("\t-multi-emb <int>\n");
     printf("\t\tSet cluster number when +P and +LP; Set maximum cluster number when +N; default is 3\n");
     printf("\t-nonparametric-lambda <float>\n");
