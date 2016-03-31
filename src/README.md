@@ -21,7 +21,7 @@
  
  > ...
  
- > word#2 [x1, x2, ... , xm]
+ > word#N [x1, x2, ... , xm]
    
   **character embeddings**
   For our model, the output format of character embeddings is
