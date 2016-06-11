@@ -39,19 +39,18 @@ typedef float real;
 
 struct vocab_word {
   long long cn;
-  int *point, *character, character_size, *character_emb_select,*character_class;
+  int *point, *character, character_size, *character_emb_select, *character_class;
+  char *word, *code, codelen;
   float *char_word_sim;
   float maxsim;
-  char *word, *code, codelen;
   int isnoncomp;
-
-  /* 
+  /*
    * character[i]   : Unicode(the i-th character in the word) - MIN_CHINESE
    * character_size : the length of the word
                       (not equal to the length of string due to UTF-8 encoding)
    * character_emb_select[i][j] : count character[i] select the j-th cluster
    * char_word_sim[i]: the i-th character's similarity with the word
-   * character_class[i]: the i-th character's meaning order number in a word
+   * character_class[i]: the i-th character's meaning order number in a word   
    */
 };
 
@@ -141,6 +140,7 @@ int ReadWordIndex(FILE *fin) {
   return SearchVocab(word);
 }
 
+// Adds a word to the vocabulary
 int AddWordToVocab(char *word, int is_non_comp) {
   unsigned int hash, length = strlen(word) + 1, len, i, pos;
   wchar_t wstr[MAX_STRING];
@@ -149,7 +149,6 @@ int AddWordToVocab(char *word, int is_non_comp) {
   strcpy(vocab[vocab_size].word, word);
   vocab[vocab_size].cn = 0;
   vocab_size++;
-  vocab[vocab_size].isnoncomp = is_non_comp;
   // Reallocate memory if needed
   if (vocab_size + 2 >= vocab_max_size) {
     vocab_max_size += 1000;
@@ -171,7 +170,7 @@ int AddWordToVocab(char *word, int is_non_comp) {
   for (i = 0; i < len; i++) {
     if (cwe_type == 1 || cwe_type == 3 || cwe_type == 5) {
       //character
-      vocab[vocab_size - 1].character[i] = wstr[i] - MIN_CHINESE; 
+      vocab[vocab_size - 1].character[i] = wstr[i] - MIN_CHINESE;
     } else if (cwe_type == 2 || cwe_type == 4) {
       //character + positon
       if (len == 1)
@@ -184,15 +183,14 @@ int AddWordToVocab(char *word, int is_non_comp) {
         pos = 3;
       vocab[vocab_size - 1].character[i] = (wstr[i] - MIN_CHINESE) * 4 + pos;
     }
-    else if (cwe_type ==6 || cwe_type == 7){
-        vocab[vocab_size -1].character[i] = (wstr[i] - MIN_CHINESE) * fix_num;
-    }
   }
   if (cwe_type == 3 || cwe_type == 4 || cwe_type == 5) {
     vocab[vocab_size - 1].character_emb_select = (int *)calloc(len * multi_emb, sizeof(int));
   }
   return vocab_size - 1;
 }
+
+// add compositional words to vocabulary with semantic contribution
 int AddWordandSim(char *word, int is_non_comp,float mxsim,float* val,int* cl) {
   unsigned int hash, length = strlen(word) + 1, len, i, pos;
   wchar_t wstr[MAX_STRING];
@@ -201,7 +199,7 @@ int AddWordandSim(char *word, int is_non_comp,float mxsim,float* val,int* cl) {
   strcpy(vocab[vocab_size].word, word);
   vocab[vocab_size].cn = 0;
   vocab_size++;
-  vocab[vocab_size].isnoncomp = is_non_comp;
+  //vocab[vocab_size].isnoncomp = is_non_comp;
   // Reallocate memory if needed
   if (vocab_size + 2 >= vocab_max_size) {
     vocab_max_size += 1000;
@@ -233,6 +231,7 @@ int AddWordandSim(char *word, int is_non_comp,float mxsim,float* val,int* cl) {
   }
   return vocab_size - 1;
 }
+
 // Used later for sorting by word counts
 int VocabCompare(const void *a, const void *b) {
     return ((struct vocab_word *)b)->cn - ((struct vocab_word *)a)->cn;
@@ -368,12 +367,10 @@ void LearnNonCompWord() {
     printf("ERROR: non-compositional wordlist file not found!\n");
     exit(1);
   }
-  int ct =0;
   while (1) {
     ReadWord(word, fin);
     if (feof(fin)) break;
     i = SearchVocab(word);
-    ct++;
     if (i == -1) {
       a = AddWordToVocab(word, 1);
       vocab[a].cn = 0;
@@ -383,6 +380,7 @@ void LearnNonCompWord() {
 }
 
 void LearnCompWord() {
+  puts("something");
   char word[MAX_STRING];
   FILE *fin;
   float *sim;
@@ -447,7 +445,10 @@ void LearnVocabFromTrainFile() {
     }
     i = SearchVocab(word);
     if (i == -1) {
-      a = AddWordToVocab(word, 1);
+      if (strlen(comp)) 
+          a = AddWordToVocab(word, 1);
+      else
+          a = AddWordToVocab(word,0);
       vocab[a].cn = 1;
     } else vocab[i].cn++;
     if (vocab_size > vocab_hash_size * 0.7) ReduceVocab();
@@ -502,7 +503,7 @@ void InitNet() {
         embed_count[a] = 0;
     }
   }
-  // init chinese character embedding from file
+
   if (strlen(char_init)) {
     file = fopen(char_init, "r");
     fscanf(file, "%lld%lld", &a, &b);
@@ -516,8 +517,8 @@ void InitNet() {
         if (b < MIN_CHINESE || b > MAX_CHINESE) continue;
         b -= MIN_CHINESE;
         t1 = b, t2 = b + 1;
-        if (cwe_type == 2 || cwe_type == 4)       // for different cwe_type,one character have different number of vectors
-          t1 *= 4, t2 *= 4;                       // set their range
+        if (cwe_type == 2 || cwe_type == 4)
+          t1 *= 4, t2 *= 4;
         if (cwe_type == 3 || cwe_type == 4 || cwe_type == 5)
           t1 *= multi_emb, t2 *= multi_emb;
          len = 0;
@@ -615,7 +616,6 @@ void *TrainModelThread(void *id) {
   long long *usedcharlist = calloc(MAX_SENTENCE_LENGTH, sizeof(long long));
   int char_list_cnt;
   unsigned long long next_random = (long long)id;
-  int gate[MAX_SENTENCE_LENGTH];
   real f, g;
   clock_t now;
   real *neu1 = (real *)calloc(dim, sizeof(real));
@@ -701,12 +701,11 @@ void *TrainModelThread(void *id) {
             if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[last_word].character[c]+vocab[last_word].character_class[c];
             }
-            for (d = 0; d < dim; d++){
-               neu1char[d] += charv[d + charv_id * dim] / vocab[last_word].character_size * vocab[last_word].char_word_sim[c]; 
-            }
+            for (d = 0; d < dim; d++)
+              neu1char[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
             charv_id_list[char_list_cnt] = charv_id;
-            usedcharlist[char_list_cnt]=vocab[last_word].character_size;
             char_list_cnt++;
+            usedcharlist[char_list_cnt]=vocab[last_word].character_size; 
           }
           for (d = 0; d < dim; d++) neu1char[d] /= 2;
         }
@@ -757,11 +756,12 @@ void *TrainModelThread(void *id) {
           if (c < 0) continue;
           if (c >= sentence_length) continue;
           last_word = sen[c];
+          if (last_word == -1) continue;
           for (c = 0; c < dim; c++) syn0[c + last_word * dim] += neu1e[c];
         }
         for (a = 0; a < char_list_cnt; a++) {
           charv_id = charv_id_list[a];
-          for (c = 0; c < dim; c++) charv[c + charv_id * dim] += neu1e[c] * char_rate; 
+          for (c = 0; c < dim; c++) charv[c + charv_id * dim] += neu1e[c] * char_rate;
         }
       }
 
@@ -770,6 +770,7 @@ void *TrainModelThread(void *id) {
     } else { //train the skip-gram architecture
 
       for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
+
         index = c = sentence_position - window + a;
         if (c < 0) continue;
         if (c >= sentence_length) continue;
@@ -784,17 +785,17 @@ void *TrainModelThread(void *id) {
             get_base(base, sen, sentence_length, index);
           }
           for (c = 0; c < vocab[last_word].character_size; c++) {
+            charv_id = vocab[last_word].character[c];
             if (cwe_type == 3 || cwe_type == 4 || cwe_type == 5) {
               charv_id = get_emb(base, charv_id, last_word, c);
             }
-            if (cwe_type ==6 || cwe_type == 7){
+             if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[last_word].character[c]+vocab[last_word].character_class[c];
             }
             for (d = 0; d < dim; d++)
-              //neu1[d] += charv[d + charv_id * dim] * vocab[last_word].char_word_sim[c];
-              neu1[d] += charv[d + charv_id * dim] / vocab[last_word].character_size * vocab[last_word].char_word_sim[c];
-             // neu1char[d] += charv[d + charv_id * dim]/usedchar;   
+              neu1[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
             charv_id_list[char_list_cnt] = charv_id;
+            // **************
             usedcharlist[char_list_cnt] = vocab[last_word].character_size;
             char_list_cnt++;
           }
@@ -843,10 +844,11 @@ void *TrainModelThread(void *id) {
         for (c = 0; c < dim; c++) syn0[c + l1] += neu1e[c];
         for (c = 0; c < char_list_cnt; c++) {
           charv_id = charv_id_list[c];
-          for (d = 0; d < dim; d++) 
-              charv[d + charv_id * dim] += neu1e[d] * char_rate;
+          for (d = 0; d < dim; d++) charv[d + charv_id * dim] += neu1e[d] * char_rate;
         }
       }
+
+
 
     }
     sentence_position++;
@@ -867,8 +869,7 @@ void TrainModel() {
   wchar_t ch[10];
   char buf[10], pos;
   real *vec = calloc(dim, sizeof(real));
-  real sim; 
-  FILE *fo,*fo2;
+  FILE *fo;
   pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
   printf("Starting training using file %s\n", train_file);
   starting_alpha = alpha;
@@ -893,18 +894,16 @@ void TrainModel() {
           if (cwe_type == 3 || cwe_type == 4 || cwe_type == 5) {
             charv_id = get_res_emb(a, b, charv_id);
           }
-            if (cwe_type ==6 || cwe_type == 7){
+          if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[a].character[b]+vocab[a].character_class[b];
             }
-          sim = 0;
-          for (c = 0; c < dim; c++) vec[c] += charv[c + charv_id * dim] * vocab[a].char_word_sim[b];
+          for (c = 0; c < dim; c++) vec[c] += charv[c + charv_id * dim] / vocab[a].character_size;
         }
       }
       for (b = 0; b < dim; b++) fprintf(fo, "%lf\t", vec[b]);
       fprintf(fo, "\n");
     }
   fclose(fo);
-  printf("fix_num = %d\n",fix_num);
   if (strlen(output_char)) {
     fo = fopen(output_char, "wb");
     if (cwe_type == 5) {
@@ -913,7 +912,6 @@ void TrainModel() {
         tot += embed_count[a];
     } else
       tot = character_size;
-    printf("\n%d\n",character_size);
     fprintf(fo, "%lld\t%lld\n", tot, dim);
     for (a = 0; a < character_size; a++) {
       if (cwe_type == 1) {
@@ -947,7 +945,7 @@ void TrainModel() {
           continue;
         fprintf(fo, "%ls\ta\t", ch);
       }
-      else if (cwe_type == 6 || cwe_type == 7) {
+       if (cwe_type == 6 || cwe_type == 7) {
           ch[0] = MIN_CHINESE + a/fix_num;
           ch[1] = 0;
           fprintf(fo,"%ls\t%d\t",ch,a%fix_num);
@@ -982,6 +980,8 @@ int main(int argc, char **argv) {
     printf("\t\tUse text corpus <file> to train the model\n");
     printf("\t-non-comp <file>\n");
     printf("\t\tUse wordlist from <file> to learn non-compositional words\n");
+    printf("\t-comp <file>\n");
+    printf("\t\tUse wordlist from <file> to learn compositional words\n");
     printf("\t-char-init <file>\n");
     printf("\t\tUse pre-trained character vectors from <file>\n");
     printf("\t-output-word <file>\n");
@@ -1014,7 +1014,7 @@ int main(int argc, char **argv) {
     printf("\t\tSet the debug mode (default = 2 = more info during training)\n");
 
     printf("\t-cwe-type <int>\n");
-    printf("\t\tSet cwe type; default is 2(CWE+P), 1(CWE), 0(word2vec), 3(CWE+L), 4(CWE+LP), 5(CWE+N), 6(SCWE), 7(SCWE+M)\n");
+    printf("\t\tSet cwe type; default is 2(CWE+P), 1(CWE), 0(word2vec), 3(CWE+L), 4(CWE+LP), 5(CWE+N),6(SCWE),7(SCWE+M)\n");
     printf("\t-multi-emb <int>\n");
     printf("\t\tSet cluster number when +P and +LP; Set maximum cluster number when +N; default is 3\n");
     printf("\t-nonparametric-lambda <float>\n");
@@ -1027,7 +1027,7 @@ int main(int argc, char **argv) {
     printf("\t\tSet the window size used to predict character embeddings, default is 5\n");
 
     printf("\nExamples:\n");
-    printf("./cwe -train data.txt -output-word vec.txt -output-char chr.txt -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -iter 3\n\n");
+    printf("./scwe -train data.txt -output-word vec.txt -output-char chr.txt -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -iter 3\n\n");
     return 0;
   }
 
@@ -1070,7 +1070,7 @@ int main(int argc, char **argv) {
     character_size = (MAX_CHINESE - MIN_CHINESE + 1) * multi_emb;
   else if (cwe_type == 4)
     character_size = (MAX_CHINESE - MIN_CHINESE + 1) * 4 * multi_emb;
-  else if (cwe_type == 6 || cwe_type == 7){
+    else if (cwe_type == 6 || cwe_type == 7){
     if (cwe_type == 6) fix_num = 1;
     character_size = (MAX_CHINESE - MIN_CHINESE +1) * fix_num;
   }
@@ -1082,4 +1082,3 @@ int main(int argc, char **argv) {
   TrainModel();
   return 0;
 }
-         // sim = 0;
