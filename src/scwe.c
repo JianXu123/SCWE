@@ -380,7 +380,6 @@ void LearnNonCompWord() {
 }
 
 void LearnCompWord() {
-  puts("something");
   char word[MAX_STRING];
   FILE *fin;
   float *sim;
@@ -396,6 +395,7 @@ void LearnCompWord() {
   sim = (float *)malloc(MAX_STRING *sizeof(float));
   charclass = (int *)malloc(MAX_STRING * sizeof(int));
   fscanf(fin,"%d",&words);
+  printf("%lld\n",words);
   long long b;
   for (b = 0; b < words; b++){
     a = 0;
@@ -675,7 +675,6 @@ void *TrainModelThread(void *id) {
     next_random = next_random * (unsigned long long)25214903917 + 11;
     b = next_random % window;
 
-
     if (cbow) {  //train the cbow architecture
 
       // in -> hidden
@@ -701,8 +700,12 @@ void *TrainModelThread(void *id) {
             if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[last_word].character[c]+vocab[last_word].character_class[c];
             }
-            for (d = 0; d < dim; d++)
-              neu1char[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
+            if (cwe_type ==6 || cwe_type == 7)
+                for (d = 0; d < dim; d++)
+                    neu1char[d] += charv[d + charv_id * dim] / vocab[last_word].character_size * vocab[last_word].char_word_sim[c];
+            else
+                for (d = 0; d < dim; d++)
+                    neu1char[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
             charv_id_list[char_list_cnt] = charv_id;
             char_list_cnt++;
             usedcharlist[char_list_cnt]=vocab[last_word].character_size; 
@@ -792,8 +795,12 @@ void *TrainModelThread(void *id) {
              if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[last_word].character[c]+vocab[last_word].character_class[c];
             }
-            for (d = 0; d < dim; d++)
-              neu1[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
+            if (cwe_type == 6 || cwe_type == 7)
+                for (d = 0; d < dim; d++)
+                    neu1[d] += charv[d + charv_id * dim] / vocab[last_word].character_size * vocab[last_word].char_word_sim[c];
+            else
+                for (d = 0; d < dim; d++)
+                    neu1[d] += charv[d + charv_id * dim] / vocab[last_word].character_size;
             charv_id_list[char_list_cnt] = charv_id;
             // **************
             usedcharlist[char_list_cnt] = vocab[last_word].character_size;
@@ -848,8 +855,6 @@ void *TrainModelThread(void *id) {
         }
       }
 
-
-
     }
     sentence_position++;
     if (sentence_position >= sentence_length) {
@@ -897,7 +902,10 @@ void TrainModel() {
           if (cwe_type ==6 || cwe_type == 7){
                 charv_id = vocab[a].character[b]+vocab[a].character_class[b];
             }
-          for (c = 0; c < dim; c++) vec[c] += charv[c + charv_id * dim] / vocab[a].character_size;
+          if (cwe_type ==6 || cwe_type == 7)
+            for (c = 0; c < dim; c++) vec[c] += charv[c + charv_id * dim] / vocab[a].character_size* vocab[a].char_word_sim[b];
+          else
+            for (c = 0; c < dim; c++)   vec[c] += charv[c+charv_id * dim] / vocab[a].character_size;
         }
       }
       for (b = 0; b < dim; b++) fprintf(fo, "%lf\t", vec[b]);
